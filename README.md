@@ -34,6 +34,7 @@ Su objetivo es facilitar el proceso de **scouting avanzado** mediante visualizac
 
 ## Estructura del proyecto
 
+```text
 proyecto-scouting/
 ├── .streamlit/
 │
@@ -65,7 +66,6 @@ proyecto-scouting/
 ├── iniciar_app.bat
 ├── requirements.txt
 └── README.md
-
 
 ---
 
