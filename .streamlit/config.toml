@@ -1,0 +1,13 @@
+[theme]
+base="dark"
+primaryColor="#00C896"  # Verde menta (puedes ajustarlo)
+backgroundColor="#0E1117"
+secondaryBackgroundColor="#1A1D23"
+textColor="#FFFFFF"
+font="sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+port = 8501
