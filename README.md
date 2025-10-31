@@ -34,31 +34,38 @@ Su objetivo es facilitar el proceso de **scouting avanzado** mediante visualizac
 
 ## Estructura del proyecto
 
-📦 proyecto-scouting
-┣ 📂 .streamlit/
-┣ 📂 data/
-┃ ┣ 📂 processed/
-┃ ┗ 📜 sample_datos.csv
-┣ 📂 notebooks/
-┃ ┣ 📂 data/
-┃ ┃ ┗ 📜 sample_datos.csv
-┃ ┗ 📜 ETL-5grandesligas.ipynb
-┣ 📂 pages/
-┃ ┣ 1_Overview.py
-┃ ┣ 2_Ranking.py
-┃ ┣ 3_Comparador.py
-┃ ┣ 4_Similares.py
-┃ ┗ 5_Shortlist.py
-┣ 📂 utils/
-┃ ┣ data_loader.py
-┃ ┣ filters.py
-┃ ┗ metrics.py
-┣ 📂 venv/
-┣ 📜 .env
-┣ 📜 app.py
-┣ 📜 iniciar_app.bat
-┣ 📜 requirements.txt
-┗ 📜 README.md
+proyecto-scouting/
+├── .streamlit/
+│
+├── data/
+│   └── processed/
+│       └── sample_datos.csv
+│
+├── notebooks/
+│   └── data/
+│       ├── ETL-5grandesligas.ipynb
+│       └── sample_datos.csv
+│
+├── pages/
+│   ├── 1_Overview.py
+│   ├── 2_Ranking.py
+│   ├── 3_Comparador.py
+│   ├── 4_Similares.py
+│   └── 5_Shortlist.py
+│
+├── utils/
+│   ├── data_loader.py
+│   ├── filters.py
+│   └── metrics.py
+│
+├── venv/
+│
+├── .env
+├── app.py
+├── iniciar_app.bat
+├── requirements.txt
+└── README.md
+
 
 ---
 
