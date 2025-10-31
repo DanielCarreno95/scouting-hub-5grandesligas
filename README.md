@@ -32,41 +32,6 @@ Su objetivo es facilitar el proceso de **scouting avanzado** mediante visualizac
 
 ---
 
-## Estructura del proyecto
-
-```text
-proyecto-scouting/
-├── .streamlit/
-│
-├── data/
-│   └── processed/
-│       └── sample_datos.csv
-│
-├── notebooks/
-│   └── data/
-│       ├── ETL-5grandesligas.ipynb
-│       └── sample_datos.csv
-│
-├── pages/
-│   ├── 1_Overview.py
-│   ├── 2_Ranking.py
-│   ├── 3_Comparador.py
-│   ├── 4_Similares.py
-│   └── 5_Shortlist.py
-│
-├── utils/
-│   ├── data_loader.py
-│   ├── filters.py
-│   └── metrics.py
-│
-├── venv/
-│
-├── .env
-├── app.py
-├── iniciar_app.bat
-├── requirements.txt
-└── README.md
-
 ---
 
 ## Tecnologías utilizadas
@@ -148,3 +113,41 @@ El trabajo destaca por su enfoque en la **automatización, eficiencia del análi
 Además, la incorporación de un **sistema de autenticación, exportación PDF e integración de herramientas interactivas** refuerza su valor aplicado dentro de la analítica moderna en el deporte.  
 
 En conjunto, este proyecto constituye una **plataforma sólida, moderna y funcional**, alineada con las exigencias reales de los **departamentos de scouting y análisis de rendimiento** en el fútbol profesional.
+
+---
+
+## Estructura del proyecto
+
+```text
+proyecto-scouting/
+├── .streamlit/
+│
+├── data/
+│   └── processed/
+│       └── sample_datos.csv
+│
+├── notebooks/
+│   └── data/
+│       ├── ETL-5grandesligas.ipynb
+│       └── sample_datos.csv
+│
+├── pages/
+│   ├── 1_Overview.py
+│   ├── 2_Ranking.py
+│   ├── 3_Comparador.py
+│   ├── 4_Similares.py
+│   └── 5_Shortlist.py
+│
+├── utils/
+│   ├── data_loader.py
+│   ├── filters.py
+│   └── metrics.py
+│
+├── venv/
+│
+├── .env
+├── app.py
+├── iniciar_app.bat
+├── requirements.txt
+└── README.md
+
