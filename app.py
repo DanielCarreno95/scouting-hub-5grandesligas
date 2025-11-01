@@ -18,7 +18,7 @@ USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 
 st.set_page_config(
-    page_title="Plataforma de Scouting - 5 Grandes Ligas",
+    page_title="Scouting Hub - Plataforma de Scouting",
     page_icon="⚽",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -136,7 +136,7 @@ def login_page():
 
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown('<div class="login-title">Plataforma de Scouting</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">Scouting Hub</div>', unsafe_allow_html=True)
         st.markdown('<div class="login-sub">Analiza, compara y descubre talento de élite ⚽</div>', unsafe_allow_html=True)
         user = st.text_input("Usuario", placeholder="Introduce tu usuario")
         pwd = st.text_input("Contraseña", placeholder="Introduce tu contraseña", type="password")
