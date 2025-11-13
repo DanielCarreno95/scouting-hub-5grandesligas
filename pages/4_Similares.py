@@ -88,30 +88,60 @@ ref_player = st.selectbox(
     placeholder="Empieza a escribir un nombre (Ej.: Nico Williams)"
 )
 
-# ======= MÉTRICAS =======
+# ===================== SELECCIÓN DE PRESETS Y MÉTRICAS =====================
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     preset_sel = st.selectbox(
         "Rol táctico (para cargar métricas predefinidas)",
         ["— (manual)"] + list(ROLE_PRESETS.keys()), index=0
     )
+
 with col2:
     if st.button("Aplicar preset", use_container_width=True):
-        # 🔧 Normalización flexible de nombres
-        cols_lower = [c.lower() for c in dff_view.columns]
+        # 🔧 Normalización flexible y robusta
+        cols_lower_map = {c.lower(): c for c in dff_view.columns}
+
         preset_feats = []
         for m in ROLE_PRESETS.get(preset_sel, []):
             m_low = m.lower()
-            # Busca coincidencias aproximadas
-            match = next((c for c in cols_lower if m_low in c or c in m_low), m_low)
-            preset_feats.append(match)
+
+            # Coincidencia exacta
+            if m_low in cols_lower_map:
+                preset_feats.append(cols_lower_map[m_low])
+                continue
+
+            # Coincidencia parcial (segura)
+            match = next(
+                (orig for low, orig in cols_lower_map.items()
+                 if m_low in low or low in m_low),
+                None
+            )
+            if match:
+                preset_feats.append(match)
+
+        # Guardar en sesión
         st.session_state["sim_feats"] = preset_feats
         st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
         st.rerun()
 
-metric_pool = [c for c in dff_view.columns if c.endswith("_per90") or c in ["cmp%", "save%"]]
-default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [])) or metric_pool[:8]
-default_feats = [f for f in default_feats if f in metric_pool] or metric_pool[:8]
+# 🔧 MÉTRICAS POSIBLES PARA EL PERFIL (pool ampliado y robusto)
+metric_pool = [
+    c for c in dff_view.columns
+    if (
+        c.endswith("_per90") or
+        c.endswith("%") or
+        "rate" in c.lower() or
+        "ratio" in c.lower()
+    )
+]
+
+# === Default dinámico ===
+default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, []))
+default_feats = [f for f in default_feats if f in metric_pool]
+
+# Si el preset no cargó suficientes métricas (por falta de match)
+if len(default_feats) < 6:
+    default_feats = metric_pool[:8]
 
 feats = st.multiselect(
     "Selecciona las métricas del perfil (6–12 recomendadas)",
@@ -119,11 +149,13 @@ feats = st.multiselect(
     default=default_feats,
     format_func=lambda c: label(c)
 )
+
+# === Validación ===
 if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
-# Genera un sufijo único para esta sesión y preset
+# === Sufijo único por preset + selección de métricas ===
 unique_suffix = f"{preset_sel}_{hash(tuple(feats))}".replace("-", "_")
 
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
@@ -135,8 +167,9 @@ with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=
         )
         for f in feats
     }
-    
+
 st.markdown("---")
+
 
 # ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
 pool = dff_view.copy()
