@@ -287,14 +287,18 @@ for pl in sel_players:
         continue
     df_cmp[f"Δ ({pl} − {ref_player})"] = df_cmp[pl] - df_cmp[ref_player]
 
+# ======= FIX DEFINITIVO DEL ERROR DE PERCENTILES =======
 if use_percentiles:
     pct_raw = raw_group[radar_feats].rank(pct=True)
 
     for pl in sel_players:
-        pr_series = pct_raw[raw_group[player_col] == pl][radar_feats].mean(numeric_only=True) * 100
-        
-        # pr_series ES UNA SERIE CON UN VALOR POR MÉTRICA → COINCIDE CON EL DF
-        df_cmp[f"% {pl}"] = pr_series.values
+        pr = pct_raw[raw_group[player_col] == pl][radar_feats].mean(numeric_only=True) * 100
+
+        # Construimos lista alineada EXACTAMENTE al orden de radar_feats
+        perc_list = [pr.get(feat, float("nan")) for feat in radar_feats]
+
+        df_cmp[f"% {pl}"] = perc_list
+# ========================================================
 
 for ccol in df_cmp.columns:
     if ccol != "Métrica":
