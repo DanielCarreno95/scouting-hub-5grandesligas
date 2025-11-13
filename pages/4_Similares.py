@@ -100,37 +100,60 @@ with col1:
 
 with col2:
     if st.button("Aplicar preset", use_container_width=True):
-        cols_lower_map = {c.lower(): c for c in dff_view.columns}
+
+        # ---- MAPEO LIMPIO DE COLUMNAS ----
+        cols_map = {c.lower(): c for c in dff_view.columns}
 
         preset_feats = []
         for m in ROLE_PRESETS.get(preset_sel, []):
             m_low = m.lower()
-            if m_low in cols_lower_map:
-                preset_feats.append(cols_lower_map[m_low])
-                continue
-            match = next(
-                (orig for low, orig in cols_lower_map.items() if m_low in low or low in m_low),
-                None
-            )
-            if match:
-                preset_feats.append(match)
 
+            # 1️⃣ COINCIDENCIA EXACTA
+            if m_low in cols_map:
+                preset_feats.append(cols_map[m_low])
+                continue
+
+            # 2️⃣ COINCIDENCIA PARCIAL ÚNICA
+            matches = [orig for low, orig in cols_map.items() if m_low in low]
+
+            if len(matches) == 1:
+                preset_feats.append(matches[0])
+            elif len(matches) > 1:
+                # Elegir la columna más corta (mejor match)
+                preset_feats.append(sorted(matches, key=len)[0])
+
+        # 3️⃣ QUITAR DUPLICADOS
+        preset_feats = list(dict.fromkeys(preset_feats))
+
+        # Guardar preset procesado
         st.session_state["sim_feats"] = preset_feats
-        st.session_state["sim_feats_uuid"] = uuid4().hex  # 🔥 FORZAR NUEVA MATRIZ DE KEYS
+
+        # Forzar UUID nuevo para regenerar sliders
+        st.session_state["sim_session_uuid"] = uuid4().hex
+
         st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
         st.rerun()
 
+
+# ---- POOL DE MÉTRICAS PERMITIDAS ----
 metric_pool = [
     c for c in dff_view.columns
-    if (c.endswith("_per90") or c.endswith("%") or "rate" in c.lower() or "ratio" in c.lower())
+    if (
+        c.endswith("_per90") or
+        c.endswith("%") or
+        "rate" in c.lower() or
+        "ratio" in c.lower()
+    )
 ]
 
+# ---- DEFAULTS ----
 default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, []))
 default_feats = [f for f in default_feats if f in metric_pool]
 
 if len(default_feats) < 6:
     default_feats = metric_pool[:8]
 
+# ---- MULTISELECT ----
 feats = st.multiselect(
     "Selecciona las métricas del perfil (6–12 recomendadas)",
     options=metric_pool,
@@ -142,19 +165,20 @@ if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
+
+# ===================== SLIDERS SIN DUPLICADOS =====================
 from uuid import uuid4
 
-# --- manejar UUID estable por sesión ---
+# UUID estable por sesión
 if "sim_session_uuid" not in st.session_state:
     st.session_state["sim_session_uuid"] = uuid4().hex
 
 base_uuid = st.session_state["sim_session_uuid"]
 
-# --- generar weights sin dict comprehension (solución definitiva) ---
+# ---- CREACIÓN DE SLIDERS (sin dict comprehension) ----
 weights = {}
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
     for f in feats:
-        # key 100% único, estable, sin colisiones
         key = f"sim_w_{preset_sel}_{f}_{base_uuid}"
 
         weights[f] = st.slider(
