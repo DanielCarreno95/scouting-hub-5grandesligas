@@ -199,13 +199,24 @@ U_unit = U / (np.linalg.norm(U, axis=1, keepdims=True) + 1e-12)
 
 sim = (U_unit @ V_unit)
 
-# ---------------------------------
-# Tabla
-# ---------------------------------
+# ======= RESULTADOS =======
+st.subheader("Jugadores más similares")
+
+# Crear columnas para dividir tabla y perfil
+col_left, col_right = st.columns([0.65, 0.35], gap="large")
+
+# -------------------------- #
+# IZQUIERDA: TABLA DE RESULTADOS
+# -------------------------- #
 with col_left:
-    cols_id = [c for c in ["player", "squad", "season", "rol_tactico", "comp", "min", "age"] if c in pool.columns]
+
+    # Columnas básicas del jugador (solo si existen)
+    cols_id = [c for c in ["player", "squad", "season", "rol_tactico", "comp", "min", "age"]
+               if c in pool.columns]
+
     cols_show = cols_id + feats + ["parecido"]
 
+    # Construir dataframe de salida
     out = pool_no_ref.copy()
     out["parecido"] = sim
     out = out.sort_values("parecido", ascending=False).head(25)
@@ -214,9 +225,10 @@ with col_left:
 
     disp = round_numeric_for_display(out, ndigits=3)
 
+    # Configuración AgGrid
     gb = GridOptionsBuilder.from_dataframe(disp)
     gb.configure_default_column(sortable=True, filter=True, resizable=True, floatingFilter=True)
-    gb.configure_column("Jugador", pinned="left", minWidth=230, tooltipField="Jugador")
+    gb.configure_column("Jugador", pinned="left", minWidth=230)
 
     heat_js = JsCode("""
         function(params){
@@ -234,8 +246,7 @@ with col_left:
 
     AgGrid(
         disp,
-        grid  
-Options=gb.build(),
+        gridOptions=gb.build(),
         theme="streamlit",
         update_mode=GridUpdateMode.NO_UPDATE,
         columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
@@ -250,11 +261,12 @@ Options=gb.build(),
         mime="text/csv"
     )
 
-# ---------------------------------
-# Perfil del jugador
-# ---------------------------------
+# -------------------------- #
+# DERECHA: FORTALEZAS / ÁREAS DE MEJORA
+# -------------------------- #
 with col_right:
     st.markdown(f"### Perfil de {ref_player}")
+
     mask_ref = (pool["player"] == ref_player)
 
     if mask_ref.any():
@@ -266,15 +278,15 @@ with col_right:
         needs = ref_pct.tail(5)
 
         cA, cB = st.columns(2)
+
         with cA:
             st.markdown("**Fortalezas**")
             for k, v_ in strengths.items():
-                st.write(f"• {label(k)} — {v_*100:.0f}º pct")
+                st.write(f"• {label(k)} — {v_ * 100:.0f}º pct")
 
         with cB:
             st.markdown("**Áreas de mejora**")
             for k, v_ in needs.items():
-                st.write(f"• {label(k)} — {v_*100:.0f}º pct")
-
+                st.write(f"• {label(k)} — {v_ * 100:.0f}º pct")
     else:
         st.info("El jugador de referencia no se encuentra en el universo actual.")
