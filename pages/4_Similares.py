@@ -142,22 +142,29 @@ if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
-# 🔥 FIX DEFINITIVO DE KEYS DUPLICADAS
-unique_suffix = f"{preset_sel}_{st.session_state.get('sim_feats_uuid', uuid4().hex)}"
+from uuid import uuid4
 
+# --- manejar UUID estable por sesión ---
+if "sim_session_uuid" not in st.session_state:
+    st.session_state["sim_session_uuid"] = uuid4().hex
+
+base_uuid = st.session_state["sim_session_uuid"]
+
+# --- generar weights sin dict comprehension (solución definitiva) ---
+weights = {}
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
-    weights = {
-        f: st.slider(
+    for f in feats:
+        # key 100% único, estable, sin colisiones
+        key = f"sim_w_{preset_sel}_{f}_{base_uuid}"
+
+        weights[f] = st.slider(
             label(f),
-            0.0, 2.0, 1.0, 0.1,
-            key=f"sim_w_{f}_{unique_suffix}"  # 🔥 Ahora SIEMPRE ÚNICO
+            min_value=0.0,
+            max_value=2.0,
+            value=1.0,
+            step=0.1,
+            key=key
         )
-        for f in feats
-    }
-
-st.markdown("---")
-
-
 
 # ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
 pool = dff_view.copy()
