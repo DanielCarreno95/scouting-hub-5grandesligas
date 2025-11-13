@@ -81,6 +81,10 @@ ROLE_PRESETS = {
     "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90","1/3_per90"],
 }
 
+with st.expander("Debug preset (solo para revisar)", expanded=False):
+    st.write("Métricas del preset detectadas:", st.session_state.get("sim_feats"))
+
+
 # ======= SELECCIÓN DE JUGADOR =======
 players_all = sorted(dff_view["player"].dropna().unique().tolist())
 ref_player = st.selectbox(
@@ -152,26 +156,39 @@ st.markdown("---")
 # ========== CONSTRUCCIÓN Y NORMALIZACIÓN (FIX GLOBAL) =====
 # ==========================================================
 
+# ======= CONSTRUCCIÓN Y NORMALIZACIÓN (USANDO df GLOBAL) =======
 pool = dff_view.copy()
 
+# Aseguramos que feats existen en el pool filtrado
 feats = [f for f in feats if f in pool.columns]
 
-# Normalización GLOBAL sobre df_full (FIX)
-df_global = df_full[feats].astype(float)
+# 1) Normalización GLOBAL sobre todo el dataset (df)
+df_global = df[feats].astype(float)      # <-- aquí está el cambio clave
 dfp = dff_view[feats].astype(float)
 
+# 2) Eliminar métricas sin variabilidad global
 clean_feats = [f for f in feats if df_global[f].std() > 0]
+if len(clean_feats) < len(feats):
+    st.warning("Se eliminaron métricas sin variabilidad (std = 0).")
+
 feats = clean_feats
+
+# Recalcular global / filtrado con las métricas limpias
+df_global = df[feats].astype(float)
+dfp = dff_view[feats].astype(float)
 
 mu = df_global[feats].mean()
 sd = df_global[feats].std().replace(0, 1e-6)
 
+# 3) Matriz normalizada SOLO para los jugadores del filtro
 Xn = (dfp[feats] - mu) / sd
 Xn = Xn.fillna(0.0)
 
+# 4) Pesos
 w = np.array([weights[f] for f in feats], dtype=float)
 w = w / (w.sum() + 1e-9)
 
+# 5) Vector del jugador objetivo y resto de jugadores
 if any(pool["player"] == ref_player):
     v = Xn[pool["player"] == ref_player].mean(axis=0).to_numpy()
     pool_no_ref = pool[pool["player"] != ref_player].copy()
@@ -187,14 +204,6 @@ U = X_no_ref.to_numpy() * w
 U_unit = U / (np.linalg.norm(U, axis=1, keepdims=True) + 1e-12)
 
 sim = (U_unit @ V_unit)
-
-# ==========================================================
-# ======================= RESULTADOS ========================
-# ==========================================================
-
-st.subheader("Jugadores más similares")
-
-col_left, col_right = st.columns([0.65, 0.35], gap="large")
 
 # ---------------------------------
 # Tabla
