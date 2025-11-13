@@ -1,5 +1,5 @@
 # =====================================
-# pages/4_Similares.py | Jugadores Similares (versión final pulida)
+# pages/4_Similares.py | Jugadores Similares (versión final con FIX DE NORMALIZACIÓN)
 # =====================================
 
 import streamlit as st
@@ -30,7 +30,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ======= ENCABEZADO ESTILO UNIFICADO (como Comparador) =======
+# ======= ENCABEZADO ESTILO UNIFICADO =======
 st.markdown("""
 <h2 style='font-weight:700; margin-bottom:0.25rem; letter-spacing:-0.01em;'>
 Jugadores Similares — Detección de Perfiles Comparables
@@ -44,32 +44,34 @@ Analiza sustitutos naturales o talentos con patrones estadísticos equivalentes.
 # ======= CARGA DE DATOS =======
 df = load_main_dataset()
 dff_view = sidebar_filters(df)
+
 if dff_view.empty:
     st.warning("No hay jugadores que cumplan las condiciones de filtro.")
     st.stop()
 
 df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
 if "comp" not in df.columns and "league" in df.columns:
     df["comp"] = df["league"]
 
-# ======= KPIs DEL UNIVERSO (AL INICIO, estilo Ranking) =======
+# Copia completa del dataset para NORMALIZACIÓN GLOBAL (FIX)
+df_full = df.copy()
+
+# ======= KPIs =======
 st.markdown("---")
 
-# Calcular métricas base
 num_players = len(dff_view)
 num_teams = dff_view["squad"].nunique() if "squad" in dff_view.columns else "—"
 avg_age = pd.to_numeric(dff_view.get("age", pd.Series(dtype=float)), errors="coerce").mean()
 avg_minutes = pd.to_numeric(dff_view.get("min", pd.Series(dtype=float)), errors="coerce").mean()
 
-# Mostrar en 4 columnas
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Número de Jugadores", f"{num_players:,}")
 k2.metric("Equipos", f"{num_teams:,}")
 k3.metric("Edad media", f"{avg_age:.1f}" if not np.isnan(avg_age) else "—")
 k4.metric("Avg Minutos Jugados", f"{avg_minutes:.0f}" if not np.isnan(avg_minutes) else "—")
 
-
-# ======= PRESETS DE ROLES (ampliados y robustos) =======
+# ======= PRESETS =======
 ROLE_PRESETS = {
     "Portero":     ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "prgp_per90"],
     "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90","touches_per90"],
@@ -84,8 +86,7 @@ players_all = sorted(dff_view["player"].dropna().unique().tolist())
 ref_player = st.selectbox(
     "Selecciona el jugador de referencia",
     options=players_all,
-    index=0,
-    placeholder="Empieza a escribir un nombre (Ej.: Nico Williams)"
+    index=0
 )
 
 # ======= MÉTRICAS =======
@@ -93,43 +94,33 @@ col1, col2 = st.columns([0.7, 0.3])
 with col1:
     preset_sel = st.selectbox(
         "Rol táctico (para cargar métricas predefinidas)",
-        ["— (manual)"] + list(ROLE_PRESETS.keys()), index=0
+        ["— (manual)"] + list(ROLE_PRESETS.keys()),
+        index=0
     )
 
 with col2:
     if st.button("Aplicar preset", use_container_width=True):
-        # Igual que en Comparador: match EXACTO por nombre en minúsculas
         cols_lower = {c.lower(): c for c in dff_view.columns}
         preset_raw = [m.lower() for m in ROLE_PRESETS.get(preset_sel, [])]
 
         preset_feats = [cols_lower[m] for m in preset_raw if m in cols_lower]
-
-        # quitar posibles duplicados preservando orden (por seguridad)
         preset_feats = list(dict.fromkeys(preset_feats))
 
-        if not preset_feats:
-            st.warning(f"No se encontraron métricas coincidentes para el rol '{preset_sel}'.")
-        else:
+        if preset_feats:
             st.session_state["sim_feats"] = preset_feats
             st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
-            st.rerun()
+        else:
+            st.warning(f"No se encontraron métricas válidas para '{preset_sel}'.")
+        st.rerun()
 
-# Pool de métricas igual de amplio que en Comparador
 metric_pool = [
     c for c in dff_view.columns
-    if (
-        c.endswith("_per90")
-        or c.endswith("%")
-        or "rate" in c.lower()
-        or "ratio" in c.lower()
-    )
+    if (c.endswith("_per90") or c.endswith("%") or "rate" in c.lower() or "ratio" in c.lower())
 ]
 
-# Defaults: si hay preset aplicado, se usa; si no, primeras del pool
 default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [])) or metric_pool[:8]
 default_feats = [f for f in default_feats if f in metric_pool] or metric_pool[:8]
 
-# Multiselect de métricas
 feats = st.multiselect(
     "Selecciona las métricas del perfil (6–12 recomendadas)",
     options=metric_pool,
@@ -137,14 +128,12 @@ feats = st.multiselect(
     format_func=lambda c: label(c)
 )
 
-# Eliminar duplicados por si acaso (evita keys duplicadas en sliders)
 feats = list(dict.fromkeys(feats))
 
 if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
-# Genera un sufijo único para esta sesión y preset (por si cambias feats)
 unique_suffix = f"{preset_sel}_{hash(tuple(feats))}".replace("-", "_")
 
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
@@ -159,39 +148,30 @@ with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=
 
 st.markdown("---")
 
+# ==========================================================
+# ========== CONSTRUCCIÓN Y NORMALIZACIÓN (FIX GLOBAL) =====
+# ==========================================================
 
-# ======= CONSTRUCCIÓN Y NORMALIZACIÓN (CORREGIDO) =======
 pool = dff_view.copy()
 
-# aseguramos que feats existen
 feats = [f for f in feats if f in pool.columns]
 
-# === NORMALIZACIÓN GLOBAL (como en Comparador) ===
-df_global = dff_view[feats].astype(float)
-
-# eliminar métricas sin variabilidad global (evita columnas a 0)
-clean_feats = [f for f in feats if df_global[f].std() > 0]
-
-if len(clean_feats) < len(feats):
-    st.warning("Se eliminaron métricas sin variabilidad (std = 0).")
-
-feats = clean_feats
-
+# Normalización GLOBAL sobre df_full (FIX)
+df_global = df_full[feats].astype(float)
 dfp = dff_view[feats].astype(float)
 
-# medias y std GLOBAL (no por subset → esta es la clave)
+clean_feats = [f for f in feats if df_global[f].std() > 0]
+feats = clean_feats
+
 mu = df_global[feats].mean()
 sd = df_global[feats].std().replace(0, 1e-6)
 
-# matriz completa normalizada
-Xn = (dfp - mu) / sd
+Xn = (dfp[feats] - mu) / sd
 Xn = Xn.fillna(0.0)
 
-# pesos
 w = np.array([weights[f] for f in feats], dtype=float)
 w = w / (w.sum() + 1e-9)
 
-# vector del jugador objetivo
 if any(pool["player"] == ref_player):
     v = Xn[pool["player"] == ref_player].mean(axis=0).to_numpy()
     pool_no_ref = pool[pool["player"] != ref_player].copy()
@@ -200,7 +180,6 @@ else:
     st.warning("El jugador objetivo no está en el universo actual.")
     st.stop()
 
-# similitud con pesos + normalización correcta
 v_w = v * w
 V_unit = v_w / (np.linalg.norm(v_w) + 1e-12)
 
@@ -209,41 +188,33 @@ U_unit = U / (np.linalg.norm(U, axis=1, keepdims=True) + 1e-12)
 
 sim = (U_unit @ V_unit)
 
+# ==========================================================
+# ======================= RESULTADOS ========================
+# ==========================================================
 
-# ======= RESULTADOS =======
 st.subheader("Jugadores más similares")
 
-# Contenedor dividido: tabla + fortalezas
 col_left, col_right = st.columns([0.65, 0.35], gap="large")
 
-# -------------------------- #
-# IZQUIERDA: TABLA DE RESULTADOS (con métricas seleccionadas)
-# -------------------------- #
+# ---------------------------------
+# Tabla
+# ---------------------------------
 with col_left:
-    # Definimos columnas base que existan en el dataset
     cols_id = [c for c in ["player", "squad", "season", "rol_tactico", "comp", "min", "age"] if c in pool.columns]
-
-    # Añadimos dinámicamente las métricas seleccionadas
     cols_show = cols_id + feats + ["parecido"]
 
-    # Creamos el dataframe final
     out = pool_no_ref.copy()
     out["parecido"] = sim
     out = out.sort_values("parecido", ascending=False).head(25)
     out = out[cols_show].copy()
-
-    # Renombramos la columna principal
     out.rename(columns={"player": "Jugador"}, inplace=True)
 
-    # Redondeamos métricas numéricas
     disp = round_numeric_for_display(out, ndigits=3)
 
-    # ==== CONFIGURACIÓN DE AGGRID ====
     gb = GridOptionsBuilder.from_dataframe(disp)
     gb.configure_default_column(sortable=True, filter=True, resizable=True, floatingFilter=True)
     gb.configure_column("Jugador", pinned="left", minWidth=230, tooltipField="Jugador")
 
-    # === FORMATO CONDICIONAL (heatmap para métricas y parecido) ===
     heat_js = JsCode("""
         function(params){
             var v = Number(params.value);
@@ -254,15 +225,14 @@ with col_left:
         }
     """)
 
-    # Aplicamos estilo condicional a cada métrica y al índice de parecido
     for col in feats + ["parecido"]:
         if col in disp.columns:
             gb.configure_column(col, cellStyle=heat_js, minWidth=110)
 
-    # === RENDERIZAR TABLA ===
     AgGrid(
         disp,
-        gridOptions=gb.build(),
+        grid  
+Options=gb.build(),
         theme="streamlit",
         update_mode=GridUpdateMode.NO_UPDATE,
         columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
@@ -270,7 +240,6 @@ with col_left:
         allow_unsafe_jscode=True
     )
 
-    # === DESCARGA CSV ===
     st.download_button(
         "⬇️ Descargar lista (CSV)",
         data=out.to_csv(index=False).encode("utf-8-sig"),
@@ -278,17 +247,18 @@ with col_left:
         mime="text/csv"
     )
 
-
-# -------------------------- #
-# DERECHA: FORTALEZAS / ÁREAS DE MEJORA
-# -------------------------- #
+# ---------------------------------
+# Perfil del jugador
+# ---------------------------------
 with col_right:
     st.markdown(f"### Perfil de {ref_player}")
     mask_ref = (pool["player"] == ref_player)
+
     if mask_ref.any():
         S = pool[feats].astype(float)
         pcts = S.rank(pct=True)
         ref_pct = pcts[mask_ref].mean().sort_values(ascending=False)
+
         strengths = ref_pct.head(5)
         needs = ref_pct.tail(5)
 
@@ -297,9 +267,11 @@ with col_right:
             st.markdown("**Fortalezas**")
             for k, v_ in strengths.items():
                 st.write(f"• {label(k)} — {v_*100:.0f}º pct")
+
         with cB:
             st.markdown("**Áreas de mejora**")
             for k, v_ in needs.items():
                 st.write(f"• {label(k)} — {v_*100:.0f}º pct")
+
     else:
         st.info("El jugador de referencia no se encuentra en el universo actual.")
