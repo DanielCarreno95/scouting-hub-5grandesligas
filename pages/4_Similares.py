@@ -160,16 +160,38 @@ with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=
 st.markdown("---")
 
 
-# ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
+# ======= CONSTRUCCIÓN Y NORMALIZACIÓN (CORREGIDO) =======
 pool = dff_view.copy()
+
+# aseguramos que feats existen
 feats = [f for f in feats if f in pool.columns]
-X_raw = pool[feats].astype(float).copy()
-Xn = (X_raw - X_raw.min()) / (X_raw.max() - X_raw.min() + 1e-9)
+
+# === NORMALIZACIÓN GLOBAL (como en Comparador) ===
+df_global = dff_view[feats].astype(float)
+
+# eliminar métricas sin variabilidad global (evita columnas a 0)
+clean_feats = [f for f in feats if df_global[f].std() > 0]
+
+if len(clean_feats) < len(feats):
+    st.warning("Se eliminaron métricas sin variabilidad (std = 0).")
+
+feats = clean_feats
+
+dfp = dff_view[feats].astype(float)
+
+# medias y std GLOBAL (no por subset → esta es la clave)
+mu = df_global[feats].mean()
+sd = df_global[feats].std().replace(0, 1e-6)
+
+# matriz completa normalizada
+Xn = (dfp - mu) / sd
 Xn = Xn.fillna(0.0)
 
+# pesos
 w = np.array([weights[f] for f in feats], dtype=float)
 w = w / (w.sum() + 1e-9)
 
+# vector del jugador objetivo
 if any(pool["player"] == ref_player):
     v = Xn[pool["player"] == ref_player].mean(axis=0).to_numpy()
     pool_no_ref = pool[pool["player"] != ref_player].copy()
@@ -178,11 +200,15 @@ else:
     st.warning("El jugador objetivo no está en el universo actual.")
     st.stop()
 
+# similitud con pesos + normalización correcta
 v_w = v * w
 V_unit = v_w / (np.linalg.norm(v_w) + 1e-12)
+
 U = X_no_ref.to_numpy() * w
 U_unit = U / (np.linalg.norm(U, axis=1, keepdims=True) + 1e-12)
+
 sim = (U_unit @ V_unit)
+
 
 # ======= RESULTADOS =======
 st.subheader("Jugadores más similares")
