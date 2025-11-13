@@ -75,7 +75,7 @@ ROLE_PRESETS = {
     "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90", "touches_per90", "err_per90"],
     "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90", "touches_per90", "pressures_per90"],
     "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90", "prgc_per90"],
-    "Volante":     ["xag_per90", "kp_per90", "gca_per90", "prgp_per90", "sca_per90", "1/3_per90", "sot_per90"],
+    "Volante":     ["xag_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90", "1/3_per90", "sot_per90"],
     "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90", "touches_per90", "pressures_per90"],
 }
 
@@ -88,8 +88,6 @@ ref_player = st.selectbox(
     placeholder="Empieza a escribir un nombre (Ej.: Nico Williams)"
 )
 
-from uuid import uuid4
-
 # ===================== SELECCIÓN DE PRESETS Y MÉTRICAS =====================
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
@@ -101,52 +99,20 @@ with col1:
 
 with col2:
     if st.button("Aplicar preset", use_container_width=True):
-
-        # ---- MAPEO LIMPIO DE COLUMNAS ----
+        # mapa columna lower -> nombre real
         cols_map = {c.lower(): c for c in dff_view.columns}
-        available = list(cols_map.keys())
 
         preset_feats = []
         for m in ROLE_PRESETS.get(preset_sel, []):
             m_low = m.lower()
-
-            # 1️⃣ COINCIDENCIA EXACTA
+            # sólo matching EXACTO por nombre en minúsculas
             if m_low in cols_map:
                 preset_feats.append(cols_map[m_low])
-                continue
 
-            # 2️⃣ COINCIDENCIA POR PREFIJO (para _per90)
-            pref = [cols_map[c] for c in available if c.startswith(m_low)]
-            if len(pref) == 1:
-                preset_feats.append(pref[0])
-                continue
-
-            # 3️⃣ COINCIDENCIA NORMALIZADA (_ per /)
-            norm = lambda s: s.replace("_", "").replace("/", "")
-            norm_matches = [cols_map[c] for c in available if norm(c) == norm(m_low)]
-            if len(norm_matches) == 1:
-                preset_feats.append(norm_matches[0])
-                continue
-
-            # 4️⃣ MATCH ESTRICTO POR TOKEN (_ separa tokens)
-            token = m_low.replace("_per90", "")
-            strict = [cols_map[c] for c in available if token in c.split("_")]
-            if len(strict) == 1:
-                preset_feats.append(strict[0])
-                continue
-
-            # 5️⃣ MATCH PARCIAL (último recurso)
-            partial = [cols_map[c] for c in available if m_low in c]
-            if partial:
-                preset_feats.append(sorted(partial, key=lambda x: abs(len(x) - len(m_low)))[0])
-                continue
-
-        # ---- QUITAR DUPLICADOS SIN ROMPER EL ORDEN ----
+        # quitar duplicados preservando orden
         preset_feats = list(dict.fromkeys(preset_feats))
 
         st.session_state["sim_feats"] = preset_feats
-        st.session_state["sim_session_uuid"] = uuid4().hex
-
         st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
         st.rerun()
 
@@ -158,7 +124,6 @@ metric_pool = [
         or c.endswith("%")
         or "rate" in c.lower()
         or "ratio" in c.lower()
-        or "per90" in c.lower()
     )
 ]
 
@@ -167,7 +132,7 @@ default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [
 default_feats = [f for f in default_feats if f in metric_pool]
 
 if len(default_feats) < 6:
-    default_feats = metric_pool[:10]
+    default_feats = metric_pool[:8]
 
 # ---- MULTISELECT ----
 feats = st.multiselect(
@@ -177,9 +142,27 @@ feats = st.multiselect(
     format_func=lambda c: label(c)
 )
 
+# eliminar posibles duplicados de feats (muy importante para keys únicas)
+feats = list(dict.fromkeys(feats))
+
 if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
+
+# ===================== SLIDERS DE PESOS =====================
+weights = {}
+with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
+    for f in feats:
+        weights[f] = st.slider(
+            label(f),
+            min_value=0.0,
+            max_value=2.0,
+            value=1.0,
+            step=0.1,
+            key=f"sim_w_{f}"   # key única por métrica
+        )
+
+st.markdown("---")
 
 # ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
 pool = dff_view.copy()
