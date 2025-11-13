@@ -71,12 +71,12 @@ k4.metric("Avg Minutos Jugados", f"{avg_minutes:.0f}" if not np.isnan(avg_minute
 
 # ======= PRESETS DE ROLES (ampliados y robustos) =======
 ROLE_PRESETS = {
-    "Portero": ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "prgp_per90"],
-    "Central": ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90", "touches_per90"],
-    "Lateral": ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90", "kp_per90"],
-    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90", "xg_per90"],
-    "Volante": ["xa_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90", "sot_per90"],
-    "Delantero": ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90", "1/3_per90"],
+    "Portero": ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "launch%", "prgp_per90"],
+    "Central": ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90","touches_per90","err_per90"],
+    "Lateral": ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90","touches_per90","pressures_per90"],
+    "Mediocentro":  ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90","prgC_per90","totdist_per90"],
+    "Volante": ["xag_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90","1/3_per90","sot_per90",],
+    "Delantero":  ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90","touches_per90","pressures_per90"],
 }
 
 # ======= SELECCIÓN DE JUGADOR =======
