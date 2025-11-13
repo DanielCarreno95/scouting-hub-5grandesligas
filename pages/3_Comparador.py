@@ -289,9 +289,12 @@ for pl in sel_players:
 
 if use_percentiles:
     pct_raw = raw_group[radar_feats].rank(pct=True)
+
     for pl in sel_players:
-        pr = pct_raw[raw_group[player_col] == pl][radar_feats].mean(numeric_only=True) * 100
-        df_cmp[f"% {pl}"] = pr.values
+        pr_series = pct_raw[raw_group[player_col] == pl][radar_feats].mean(numeric_only=True) * 100
+        
+        # pr_series ES UNA SERIE CON UN VALOR POR MÉTRICA → COINCIDE CON EL DF
+        df_cmp[f"% {pl}"] = pr_series.values
 
 for ccol in df_cmp.columns:
     if ccol != "Métrica":
