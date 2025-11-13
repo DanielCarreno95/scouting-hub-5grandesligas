@@ -198,7 +198,10 @@ if df_group.empty:
 # ===================== NORMALIZACIÓN =====================
 S_global = df[radar_feats].astype(float)
 S = df_group[radar_feats].astype(float).copy()
-S_norm = S.apply(lambda x: 100 * (x - S_global[x.name].min()) / (S_global[x.name].max() - S_global[x.name].min() + 1e-9))
+S_norm = S.apply(
+    lambda x: 100 * (x - S_global[x.name].min()) /
+              (S_global[x.name].max() - S_global[x.name].min() + 1e-9)
+)
 S_norm = S_norm.clip(lower=0, upper=100)
 baseline = S_norm.mean(axis=0)
 pct = df_group[radar_feats].rank(pct=True) * 100 if use_percentiles else None
