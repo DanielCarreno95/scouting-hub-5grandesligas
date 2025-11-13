@@ -71,12 +71,12 @@ k4.metric("Avg Minutos Jugados", f"{avg_minutes:.0f}" if not np.isnan(avg_minute
 
 # ======= PRESETS DE ROLES (ampliados y robustos) =======
 ROLE_PRESETS = {
-    "Portero":     ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "launch%", "prgp_per90"],
-    "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90", "touches_per90", "err_per90"],
-    "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90", "touches_per90", "pressures_per90"],
-    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90", "prgc_per90"],
-    "Volante":     ["xag_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90", "1/3_per90", "sot_per90"],
-    "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90", "touches_per90", "pressures_per90"],
+    "Portero":     ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "prgp_per90"],
+    "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90","touches_per90"],
+    "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90","kp_per90"],
+    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90","xg_per90"],
+    "Volante":     ["xa_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90","sot_per90"],
+    "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90","1/3_per90"],
 }
 
 # ======= SELECCIÓN DE JUGADOR =======
@@ -88,35 +88,33 @@ ref_player = st.selectbox(
     placeholder="Empieza a escribir un nombre (Ej.: Nico Williams)"
 )
 
-# ===================== SELECCIÓN DE PRESETS Y MÉTRICAS =====================
+# ======= MÉTRICAS =======
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     preset_sel = st.selectbox(
         "Rol táctico (para cargar métricas predefinidas)",
-        ["— (manual)"] + list(ROLE_PRESETS.keys()),
-        index=0
+        ["— (manual)"] + list(ROLE_PRESETS.keys()), index=0
     )
 
 with col2:
     if st.button("Aplicar preset", use_container_width=True):
-        # mapa columna lower -> nombre real
-        cols_map = {c.lower(): c for c in dff_view.columns}
+        # Igual que en Comparador: match EXACTO por nombre en minúsculas
+        cols_lower = {c.lower(): c for c in dff_view.columns}
+        preset_raw = [m.lower() for m in ROLE_PRESETS.get(preset_sel, [])]
 
-        preset_feats = []
-        for m in ROLE_PRESETS.get(preset_sel, []):
-            m_low = m.lower()
-            # sólo matching EXACTO por nombre en minúsculas
-            if m_low in cols_map:
-                preset_feats.append(cols_map[m_low])
+        preset_feats = [cols_lower[m] for m in preset_raw if m in cols_lower]
 
-        # quitar duplicados preservando orden
+        # quitar posibles duplicados preservando orden (por seguridad)
         preset_feats = list(dict.fromkeys(preset_feats))
 
-        st.session_state["sim_feats"] = preset_feats
-        st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
-        st.rerun()
+        if not preset_feats:
+            st.warning(f"No se encontraron métricas coincidentes para el rol '{preset_sel}'.")
+        else:
+            st.session_state["sim_feats"] = preset_feats
+            st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
+            st.rerun()
 
-# ---- POOL DE MÉTRICAS PERMITIDAS ----
+# Pool de métricas igual de amplio que en Comparador
 metric_pool = [
     c for c in dff_view.columns
     if (
@@ -127,14 +125,11 @@ metric_pool = [
     )
 ]
 
-# ---- DEFAULTS ----
-default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, []))
-default_feats = [f for f in default_feats if f in metric_pool]
+# Defaults: si hay preset aplicado, se usa; si no, primeras del pool
+default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [])) or metric_pool[:8]
+default_feats = [f for f in default_feats if f in metric_pool] or metric_pool[:8]
 
-if len(default_feats) < 6:
-    default_feats = metric_pool[:8]
-
-# ---- MULTISELECT ----
+# Multiselect de métricas
 feats = st.multiselect(
     "Selecciona las métricas del perfil (6–12 recomendadas)",
     options=metric_pool,
@@ -142,27 +137,28 @@ feats = st.multiselect(
     format_func=lambda c: label(c)
 )
 
-# eliminar posibles duplicados de feats (muy importante para keys únicas)
+# Eliminar duplicados por si acaso (evita keys duplicadas en sliders)
 feats = list(dict.fromkeys(feats))
 
 if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
-# ===================== SLIDERS DE PESOS =====================
-weights = {}
+# Genera un sufijo único para esta sesión y preset (por si cambias feats)
+unique_suffix = f"{preset_sel}_{hash(tuple(feats))}".replace("-", "_")
+
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
-    for f in feats:
-        weights[f] = st.slider(
+    weights = {
+        f: st.slider(
             label(f),
-            min_value=0.0,
-            max_value=2.0,
-            value=1.0,
-            step=0.1,
-            key=f"sim_w_{f}"   # key única por métrica
+            0.0, 2.0, 1.0, 0.1,
+            key=f"sim_w_{f}_{unique_suffix}"
         )
+        for f in feats
+    }
 
 st.markdown("---")
+
 
 # ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
 pool = dff_view.copy()
