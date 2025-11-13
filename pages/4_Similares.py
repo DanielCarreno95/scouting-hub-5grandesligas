@@ -71,12 +71,12 @@ k4.metric("Avg Minutos Jugados", f"{avg_minutes:.0f}" if not np.isnan(avg_minute
 
 # ======= PRESETS DE ROLES (ampliados y robustos) =======
 ROLE_PRESETS = {
-    "Portero": ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "launch%", "prgp_per90"],
-    "Central": ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90","touches_per90","err_per90"],
-    "Lateral": ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90","touches_per90","pressures_per90"],
-    "Mediocentro":  ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90","prgC_per90","totdist_per90"],
-    "Volante": ["xag_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90","1/3_per90","sot_per90",],
-    "Delantero":  ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90","touches_per90","pressures_per90"],
+    "Portero":     ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "launch%", "prgp_per90"],
+    "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90", "touches_per90", "err_per90"],
+    "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90", "touches_per90", "pressures_per90"],
+    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90", "prgc_per90"],
+    "Volante":     ["xag_per90", "kp_per90", "gca_per90", "prgp_per90", "sca_per90", "1/3_per90", "sot_per90"],
+    "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90", "touches_per90", "pressures_per90"],
 }
 
 # ======= SELECCIÓN DE JUGADOR =======
@@ -95,7 +95,8 @@ col1, col2 = st.columns([0.7, 0.3])
 with col1:
     preset_sel = st.selectbox(
         "Rol táctico (para cargar métricas predefinidas)",
-        ["— (manual)"] + list(ROLE_PRESETS.keys()), index=0
+        ["— (manual)"] + list(ROLE_PRESETS.keys()),
+        index=0
     )
 
 with col2:
@@ -103,6 +104,7 @@ with col2:
 
         # ---- MAPEO LIMPIO DE COLUMNAS ----
         cols_map = {c.lower(): c for c in dff_view.columns}
+        available = list(cols_map.keys())
 
         preset_feats = []
         for m in ROLE_PRESETS.get(preset_sel, []):
@@ -113,36 +115,50 @@ with col2:
                 preset_feats.append(cols_map[m_low])
                 continue
 
-            # 2️⃣ COINCIDENCIA PARCIAL ÚNICA
-            matches = [orig for low, orig in cols_map.items() if m_low in low]
+            # 2️⃣ COINCIDENCIA POR PREFIJO (para _per90)
+            pref = [cols_map[c] for c in available if c.startswith(m_low)]
+            if len(pref) == 1:
+                preset_feats.append(pref[0])
+                continue
 
-            if len(matches) == 1:
-                preset_feats.append(matches[0])
-            elif len(matches) > 1:
-                # Elegir la columna más corta (mejor match)
-                preset_feats.append(sorted(matches, key=len)[0])
+            # 3️⃣ COINCIDENCIA NORMALIZADA (_ per /)
+            norm = lambda s: s.replace("_", "").replace("/", "")
+            norm_matches = [cols_map[c] for c in available if norm(c) == norm(m_low)]
+            if len(norm_matches) == 1:
+                preset_feats.append(norm_matches[0])
+                continue
 
-        # 3️⃣ QUITAR DUPLICADOS
+            # 4️⃣ MATCH ESTRICTO POR TOKEN (_ separa tokens)
+            token = m_low.replace("_per90", "")
+            strict = [cols_map[c] for c in available if token in c.split("_")]
+            if len(strict) == 1:
+                preset_feats.append(strict[0])
+                continue
+
+            # 5️⃣ MATCH PARCIAL (último recurso)
+            partial = [cols_map[c] for c in available if m_low in c]
+            if partial:
+                preset_feats.append(sorted(partial, key=lambda x: abs(len(x) - len(m_low)))[0])
+                continue
+
+        # ---- QUITAR DUPLICADOS SIN ROMPER EL ORDEN ----
         preset_feats = list(dict.fromkeys(preset_feats))
 
-        # Guardar preset procesado
         st.session_state["sim_feats"] = preset_feats
-
-        # Forzar UUID nuevo para regenerar sliders
         st.session_state["sim_session_uuid"] = uuid4().hex
 
         st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
         st.rerun()
 
-
 # ---- POOL DE MÉTRICAS PERMITIDAS ----
 metric_pool = [
     c for c in dff_view.columns
     if (
-        c.endswith("_per90") or
-        c.endswith("%") or
-        "rate" in c.lower() or
-        "ratio" in c.lower()
+        c.endswith("_per90")
+        or c.endswith("%")
+        or "rate" in c.lower()
+        or "ratio" in c.lower()
+        or "per90" in c.lower()
     )
 ]
 
@@ -151,7 +167,7 @@ default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [
 default_feats = [f for f in default_feats if f in metric_pool]
 
 if len(default_feats) < 6:
-    default_feats = metric_pool[:8]
+    default_feats = metric_pool[:10]
 
 # ---- MULTISELECT ----
 feats = st.multiselect(
@@ -164,31 +180,6 @@ feats = st.multiselect(
 if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
-
-
-# ===================== SLIDERS SIN DUPLICADOS =====================
-from uuid import uuid4
-
-# UUID estable por sesión
-if "sim_session_uuid" not in st.session_state:
-    st.session_state["sim_session_uuid"] = uuid4().hex
-
-base_uuid = st.session_state["sim_session_uuid"]
-
-# ---- CREACIÓN DE SLIDERS (sin dict comprehension) ----
-weights = {}
-with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
-    for f in feats:
-        key = f"sim_w_{preset_sel}_{f}_{base_uuid}"
-
-        weights[f] = st.slider(
-            label(f),
-            min_value=0.0,
-            max_value=2.0,
-            value=1.0,
-            step=0.1,
-            key=key
-        )
 
 # ======= CONSTRUCCIÓN Y NORMALIZACIÓN =======
 pool = dff_view.copy()
