@@ -74,26 +74,14 @@ k4.metric("Avg Minutos Jugados", f"{avg_minutes:.0f}" if not np.isnan(avg_minute
 # ======= PRESETS =======
 ROLE_PRESETS = {
     "Portero":     ["save%", "psxg+/-_per90", "psxg_per90", "saves_per90", "cs%", "prgp_per90"],
-    "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90","touches_per90"],
-    "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90","kp_per90"],
-    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90","xg_per90"],
-    "Volante":     ["xa_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90","sot_per90"],
-    "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90","1/3_per90"],
+    "Central":     ["tkl+int_per90", "int_per90", "blocks_per90", "clr_per90", "recov_per90", "touches_per90"],
+    "Lateral":     ["ppa_per90", "prgp_per90", "carries_per90", "tkl+int_per90", "1/3_per90", "kp_per90"],
+    "Mediocentro": ["xa_per90", "prgp_per90", "recov_per90", "pressures_per90", "totdist_per90", "xg_per90"],
+    "Volante":     ["xa_per90", "kp_per90", "gca90_per90", "prgp_per90", "sca_per90", "sot_per90"],
+    "Delantero":   ["gls_per90", "xg_per90", "npxg_per90", "sot_per90", "xa_per90", "1/3_per90"],
 }
 
-with st.expander("Debug preset (solo para revisar)", expanded=False):
-    st.write("Métricas del preset detectadas:", st.session_state.get("sim_feats"))
-
-
-# ======= SELECCIÓN DE JUGADOR =======
-players_all = sorted(dff_view["player"].dropna().unique().tolist())
-ref_player = st.selectbox(
-    "Selecciona el jugador de referencia",
-    options=players_all,
-    index=0
-)
-
-# ======= MÉTRICAS =======
+# ======= SELECCIÓN DE MÉTRICAS =======
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     preset_sel = st.selectbox(
@@ -108,18 +96,30 @@ with col2:
         preset_raw = [m.lower() for m in ROLE_PRESETS.get(preset_sel, [])]
 
         preset_feats = [cols_lower[m] for m in preset_raw if m in cols_lower]
+
         preset_feats = list(dict.fromkeys(preset_feats))
 
-        if preset_feats:
+        if not preset_feats:
+            st.warning(f"No se encontraron métricas coincidentes para el rol '{preset_sel}'.")
+        else:
             st.session_state["sim_feats"] = preset_feats
             st.success(f"Métricas cargadas: {preset_sel} → {len(preset_feats)} métricas.")
-        else:
-            st.warning(f"No se encontraron métricas válidas para '{preset_sel}'.")
-        st.rerun()
+            st.rerun()
 
+# Debug opcional
+with st.expander("Debug preset (solo para revisar)", expanded=False):
+    st.write("Métricas detectadas:", st.session_state.get("sim_feats"))
+
+
+# ======= POOL DE MÉTRICAS =======
 metric_pool = [
     c for c in dff_view.columns
-    if (c.endswith("_per90") or c.endswith("%") or "rate" in c.lower() or "ratio" in c.lower())
+    if (
+        c.endswith("_per90")
+        or c.endswith("%")
+        or "rate" in c.lower()
+        or "ratio" in c.lower()
+    )
 ]
 
 default_feats = st.session_state.get("sim_feats", ROLE_PRESETS.get(preset_sel, [])) or metric_pool[:8]
@@ -138,57 +138,51 @@ if len(feats) < 6:
     st.info("El perfil necesita al menos 6 métricas para comparar correctamente.")
     st.stop()
 
+
+# ========== SLIDERS ==========
 unique_suffix = f"{preset_sel}_{hash(tuple(feats))}".replace("-", "_")
 
 with st.expander("Ajusta la importancia de cada métrica (0.0–2.0)", expanded=True):
     weights = {
         f: st.slider(
             label(f),
-            0.0, 2.0, 1.0, 0.1,
+            0.0,
+            2.0,
+            1.0,
+            0.1,
             key=f"sim_w_{f}_{unique_suffix}"
         )
         for f in feats
     }
 
-st.markdown("---")
 
-# ==========================================================
-# ========== CONSTRUCCIÓN Y NORMALIZACIÓN (FIX GLOBAL) =====
-# ==========================================================
-
-# ======= CONSTRUCCIÓN Y NORMALIZACIÓN (USANDO df GLOBAL) =======
+# ======= NORMALIZACIÓN GLOBAL =======
+df_full = df.copy()
 pool = dff_view.copy()
 
-# Aseguramos que feats existen en el pool filtrado
 feats = [f for f in feats if f in pool.columns]
 
-# 1) Normalización GLOBAL sobre todo el dataset (df)
-df_global = df[feats].astype(float)      # <-- aquí está el cambio clave
+df_global = df_full[feats].astype(float)
 dfp = dff_view[feats].astype(float)
 
-# 2) Eliminar métricas sin variabilidad global
 clean_feats = [f for f in feats if df_global[f].std() > 0]
 if len(clean_feats) < len(feats):
-    st.warning("Se eliminaron métricas sin variabilidad (std = 0).")
+    st.warning("Se eliminaron métricas sin variabilidad global (std = 0).")
 
 feats = clean_feats
 
-# Recalcular global / filtrado con las métricas limpias
-df_global = df[feats].astype(float)
+df_global = df_full[feats].astype(float)
 dfp = dff_view[feats].astype(float)
 
-mu = df_global[feats].mean()
-sd = df_global[feats].std().replace(0, 1e-6)
+mu = df_global.mean()
+sd = df_global.std().replace(0, 1e-6)
 
-# 3) Matriz normalizada SOLO para los jugadores del filtro
-Xn = (dfp[feats] - mu) / sd
+Xn = (dfp - mu) / sd
 Xn = Xn.fillna(0.0)
 
-# 4) Pesos
 w = np.array([weights[f] for f in feats], dtype=float)
 w = w / (w.sum() + 1e-9)
 
-# 5) Vector del jugador objetivo y resto de jugadores
 if any(pool["player"] == ref_player):
     v = Xn[pool["player"] == ref_player].mean(axis=0).to_numpy()
     pool_no_ref = pool[pool["player"] != ref_player].copy()
